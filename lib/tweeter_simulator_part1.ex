@@ -15,4 +15,13 @@ defmodule Tweeter do
   def hello do
     :world
   end
+
+  def main(args) do
+
+    user_name = "roukna"
+    password = "rou123"
+
+    Tweeter.Client
+    
+  end
 end
