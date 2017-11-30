@@ -1,9 +1,9 @@
 defmodule Tweeter.Server do
   use GenServer
-  #@name :tweeter_engine
+  @name :tweeter_engine
 
   # API
-  def startlink(nodeID) do
+  def startlink() do
     users = :ets.new(:users, [:set, :public, :named_table])
     tweets = :ets.new(:tweets, [:set, :public, :named_table])
     followers = :ets.new(:followers, [:set, :public, :named_table])
@@ -18,7 +18,7 @@ defmodule Tweeter.Server do
     #Node.set_cookie(:tweeter)
 
     # Registers the GenServer process ID globally.
-    {:ok, pid} = GenServer.start_link(__MODULE__, {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, 0}, name: :tweeter_engine)
+    {:ok, pid} = GenServer.start_link(__MODULE__, {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, 0}, name: @name)
     #:global.register_name(@name, pid)
   end
 
@@ -61,6 +61,15 @@ defmodule Tweeter.Server do
     end
   end
   
+  # Logout
+  def handle_call({:logout, user_name}, _from, state) do
+    {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id} = state
+    list_of_active_users = List.delete(list_of_active_users, user_name)
+    login_pwd = elem(List.first(:ets.lookup(users, user_name)), 1)
+    {:reply, "Logged out!", state}
+  end
+  
+  
   # Subscribe
   def handle_cast({:subscribe, follower, user}, state) do
     {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id} = state
@@ -78,7 +87,7 @@ defmodule Tweeter.Server do
     else
       elem(List.first(:ets.lookup(following, follower)), 1)
     end
-    subscribing =  [user] ++ following
+    subscribing =  [user] ++ subscribing
     :ets.insert(following, {follower, subscribing})
 
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id}}
@@ -90,8 +99,6 @@ defmodule Tweeter.Server do
     tweet_id = tweet_id + 1
     current_time = DateTime.utc_now()
     :ets.insert_new(tweets, {tweet_id, user_name, tweet, current_time})
-
-    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet})
 
     hashtags_in_tweet = String.split(tweet, " ") |> Enum.filter(fn word -> String.contains?(word, "#") end)
     for h_tag <- hashtags_in_tweet do
@@ -115,27 +122,9 @@ defmodule Tweeter.Server do
       :ets.insert(user_mentions, {u_mentions, tweet_ids_of_umen})
     end
 
+    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet})
+
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id}}
-  end
-
-  # Query user tweets
-  def handle_call({:query_user_tweets, user_name}, _from, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id} = state
-    #TODO change
-    
-    subscribing = if :ets.lookup(following, user_name) == [] do
-      []
-    else
-      elem(List.first(:ets.lookup(following, user_name)), 1)
-    end
-
-    result = for f_user <- subscribing do
-      list_of_tweets = List.flatten(:ets.match(tweets, {:_, f_user, :"$1", :_}))
-      Enum.map(list_of_tweets, fn tweet -> {f_user, tweet} end)
-    end
-    result = List.flatten(result)
-    IO.inspect result
-    {:reply, result, state}
   end
 
   # Broadcast live tweets
@@ -149,12 +138,66 @@ defmodule Tweeter.Server do
     
     for f_user <- subscribers do
       pid = GenServer.whereis(String.to_atom(f_user))
-      if(Process.alive?(pid) == true) do
-        IO.puts f_user
-        #GenServer.cast(String.to_atom(f_user), {:live_tweets, user_name, tweet})
+      if(pid != nil and Process.alive?(pid) == true) do
+        GenServer.cast(String.to_atom(f_user), {:live_tweets, user_name, tweet})
       end
     end
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id}}
+  end
+
+    # Query user tweets
+  def handle_call({:query_user_tweets, user_name}, _from, state) do
+    {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id} = state
+    subscribing = if :ets.lookup(following, user_name) == [] do
+      []
+    else
+      elem(List.first(:ets.lookup(following, user_name)), 1)
+    end
+
+    IO.inspect subscribing
+
+    result = for f_user <- subscribing do
+      list_of_tweets = List.flatten(:ets.match(tweets, {:_, f_user, :"$1", :_}))
+      Enum.map(list_of_tweets, fn tweet -> {f_user, tweet} end)
+    end
+    result = List.flatten(result)
+    #IO.inspect result
+    {:reply, result, state}
+  end
+
+  # Query user tweets
+  def handle_call({:query_user_mentions, user_name}, _from, state) do
+    {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id} = state
+    user_men = "@" <> user_name
+    list_of_tweet_ids = if :ets.lookup(user_mentions, user_men) == [] do
+      []
+    else
+      elem(List.first(:ets.lookup(user_mentions, user_men)), 1)
+    end
+
+    result = for u_tweet_id <- list_of_tweet_ids do
+      list_of_tweets = List.flatten(:ets.match(tweets, {u_tweet_id, :"$1", :"$2", :_}))
+    end
+    result = List.flatten(result)
+    IO.inspect result
+    {:reply, result, state}
+  end
+
+  # Get Tweets from Hashtags
+  def handle_call({:get_tweets_hashtag, hashtag}, _from, state) do
+    {users, tweets, followers, following, hashtags, user_mentions, list_of_active_users, tweet_id} = state
+    tweet_ids = if :ets.lookup(hashtags, hashtag) == [] do
+      []
+    else
+      elem(List.first(:ets.lookup(hashtags, hashtag)), 1)
+    end
+    
+    result = for tweet_id <- tweet_ids do
+      list_of_tweets = List.flatten(:ets.match(tweets, {tweet_id, :"$1", :"$2", :_}))
+    end
+    result = List.flatten(result)
+
+    {:reply, result, state}
   end
 
 end
