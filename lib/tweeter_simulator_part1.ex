@@ -70,7 +70,7 @@ defmodule Tweeter do
     for id <- 1..no_of_clients do
       follower = "user" <> to_string(id)
       num_of_sub = round(Float.floor(c/id))
-      spawn(fn -> subscribe_user(follower, List.delete(list_of_available_users, id), num_of_sub) end)
+      subscribe_user(follower, List.delete(list_of_available_users, id), num_of_sub)
     end    
   end
 
@@ -84,25 +84,61 @@ defmodule Tweeter do
     end
   end
 
-  def start_simulation(no_of_clients) do
+  def start_simulation(no_of_clients, list_of_static_hashtags) do
     # Maintain connect and disconnect
     active_users = Tweeter.maintain_connect_disconnect(no_of_clients, [])
+    IO.inspect active_users
 
     # Send tweets
     for user_id <- active_users do
       user_name = "user" <> to_string(user_id)
-      tweet = (:crypto.strong_rand_bytes(30)|> Base.encode16 |> binary_part(0, 30))
+      u_men_toss = Enum.random([1, -1])
+      hash_toss = Enum.random([1, -1])
+
+      # Add user mentions
+      user_mention = if (u_men_toss == 1) do
+        user_id = Enum.random(active_users)
+        " @user" <> to_string(user_id)
+      else
+        ""
+      end
+      # Add hash tags
+      hashtag = if (hash_toss == 1) do
+        " " <> Enum.random(list_of_static_hashtags)
+      else
+        ""
+      end
+
+      tweet = ((:crypto.strong_rand_bytes(5)|> Base.encode16) |> (binary_part(0, 5))) <> " " <> ((:crypto.strong_rand_bytes(6)|> Base.encode16 |> binary_part(0, 6))) <> " " <> ((:crypto.strong_rand_bytes(7)|> Base.encode16 |> binary_part(0, 7)))
+      #<> ((:crypto.strong_rand_bytes(7)|> Base.encode16 |> binary_part(0, 7)))
+      tweet = tweet <> user_mention <> hashtag
       delay = @delay * user_id
       spawn(fn -> Tweeter.Client.send_tweets(user_name, tweet, delay) end)
+      #spawn(fn -> Tweeter.Client.send_tweets(user_name, tweet, delay) end)
     end
 
+
+    Process.sleep(15000)
+
+    user_id = Enum.random(active_users)
+    user_name = "@user" <> to_string(user_id)
+    spawn(fn-> Tweeter.Client.query_for_usermentions(user_name) end)
+    Process.sleep(5000)
+
+    user_id = Enum.random(active_users)
+    user_name = "@user" <> to_string(user_id)
+    hashtag = Enum.random(list_of_static_hashtags)
+    spawn(fn-> Tweeter.Client.query_for_hashtags(user_name, hashtag) end)
+
     Process.sleep(10000)
-    start_simulation(no_of_clients)
+    start_simulation(no_of_clients, list_of_static_hashtags)
   end
 
   def main(args) do
     [no_of_clients] = args
     no_of_clients = String.to_integer(no_of_clients)
+
+    list_of_static_hashtags = ["#happyme","#gogators ","#cityofjoy","#lifeisgood","#indiacalling"]
 
     # Start the server
     Tweeter.Server.startlink()
@@ -117,7 +153,7 @@ defmodule Tweeter do
 
     # Subscribe all users
     subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients)
-    Process.sleep(10000)
-    start_simulation(no_of_clients)
+    #Process.sleep(10000)
+    start_simulation(no_of_clients, list_of_static_hashtags)
   end
 end
