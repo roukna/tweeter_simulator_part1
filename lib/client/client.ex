@@ -4,6 +4,9 @@ defmodule Tweeter.Client do
     def start_client(user_name, password) do
       GenServer.start_link(__MODULE__, {user_name}, name: String.to_atom(user_name))
       GenServer.cast(String.to_atom("tweeter_engine"), {:login, user_name, password})
+      result = GenServer.call(String.to_atom("tweeter_engine"), {:query_user_tweets, user_name}, :infinity)
+      IO.inspect "Query for user tweets ::: #{user_name}"
+      IO.inspect result
     end
 
     def query_for_hashtags(user_name, hashtag) do
@@ -53,6 +56,8 @@ defmodule Tweeter.Client do
       else 
         seen_tweets
       end
+
+      seen_tweets = seen_tweets ++ GenServer.call(String.to_atom("tweeter_engine"), {:get_tweets_hashtag, username, last_searched_htag}, :infinity)
 
       if seen_tweets != [] and seen_tweets != nil do
         rand_seen_tweet = Enum.random(seen_tweets)

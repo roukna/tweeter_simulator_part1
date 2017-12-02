@@ -91,8 +91,7 @@ defmodule Tweeter do
     active_users = Tweeter.maintain_connect_disconnect(no_of_clients, active_users)
 
     Process.sleep(500)
-    #IO.inspect active_users
-
+    
     # Send tweets
     for user_id <- active_users do
       user_name = "user" <> to_string(user_id)
