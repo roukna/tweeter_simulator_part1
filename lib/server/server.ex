@@ -12,14 +12,15 @@ defmodule Tweeter.Server do
     user_recent_hashtags = :ets.new(:user_recent_hashtags, [:set, :public, :named_table])
     list_of_active_users = []
 
-    #server_ip = get_ip(0)
-    #server = "tweeter_engine@" <> to_string(server_ip)
-    #Node.start(String.to_atom(server))
-    #Node.set_cookie(:tweeter)
+    server_ip = get_ip(0)
+    server = "tweeter_engine@" <> to_string(server_ip)
+    IO.inspect server
+    Node.start(String.to_atom(server))
+    Node.set_cookie(:tweeter)
 
-    # Registers the GenServer process ID globally.
+    IO.inspect "Server connect string (from server): #{server}"
+
     {:ok, pid} = GenServer.start_link(__MODULE__, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, 0}, name: String.to_atom("tweeter_engine"))
-    #:global.register_name(@name, pid)
   end
 
   @doc """
@@ -94,7 +95,7 @@ defmodule Tweeter.Server do
   end
 
   # Tweet
-  def handle_cast({:tweet, user_name, tweet}, state) do
+  def handle_cast({:tweet, user_name, tweet, client_ip}, state) do
     {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
     tweet_id = tweet_id + 1
     current_time = DateTime.utc_now()
@@ -122,25 +123,26 @@ defmodule Tweeter.Server do
       :ets.insert(user_mentions, {u_mentions, tweet_ids_of_umen})
     end
 
-    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet})
+    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet, client_ip})
 
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
   end
 
   # Retweet
 
-  def handle_cast({:retweet, user_name, tweet, retweeted_from}, state) do
+  def handle_cast({:retweet, user_name, tweet, retweeted_from, client_ip}, state) do
     {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
     tweet_id = tweet_id + 1
     current_time = DateTime.utc_now()
     :ets.insert_new(tweets, {tweet_id, user_name, tweet, current_time, True, retweeted_from})  
-    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet})
-      
+    IO.inspect "Retweet::: User #{user_name} retweeted #{tweet} from #{retweeted_from}"
+
+    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet, client_ip})
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
   end
 
   # Broadcast live tweets
-  def handle_cast({:broadcast_live_tweets, user_name, tweet}, state) do
+  def handle_cast({:broadcast_live_tweets, user_name, tweet, client_ip}, state) do
     {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
     subscribers = if :ets.lookup(followers, user_name) == [] do
       []
@@ -151,7 +153,7 @@ defmodule Tweeter.Server do
     for f_user <- subscribers do
       pid = GenServer.whereis(String.to_atom(f_user))
       if(pid != nil and Process.alive?(pid) == true) do
-        GenServer.cast(String.to_atom(f_user), {:live_tweets, user_name, tweet})
+        GenServer.cast({String.to_atom(f_user), String.to_atom(client_ip)}, {:live_tweets, user_name, tweet})
       end
     end
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}

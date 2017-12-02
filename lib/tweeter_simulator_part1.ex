@@ -25,6 +25,20 @@ defmodule Tweeter do
     sum
   end
 
+  def connect_to_engine(server_ip) do    
+    client_ip = get_ip(0)
+    server = "server@" <> to_string(server_ip)
+    client = "client" <> "@" <> to_string(client_ip)
+    Node.start(String.to_atom(client))
+    Node.set_cookie(:tweeter)
+    # Connects to the server
+    Node.connect(String.to_atom(server))
+
+    IO.inspect "Client connect string: #{client}"
+    IO.inspect "Server connect string: #{server}"
+    client
+  end
+
   def maintain_connect_disconnect(no_of_clients, active_users) do
     rand_active = Enum.random(1..no_of_clients)
     users = Enum.to_list(1..no_of_clients)
@@ -86,55 +100,55 @@ defmodule Tweeter do
     end
   end
 
-  def start_simulation(no_of_clients, list_of_static_hashtags, active_users) do
+  def start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip) do
     # Maintain connect and disconnect
     active_users = Tweeter.maintain_connect_disconnect(no_of_clients, active_users)
-
     Process.sleep(500)
-    
     # Send tweets
     for user_id <- active_users do
       user_name = "user" <> to_string(user_id)
       delay = @delay * user_id
-      spawn(fn -> Tweeter.Client.send_tweets(user_name, active_users, list_of_static_hashtags, delay) end)
+      spawn(fn -> Tweeter.Client.send_tweets(user_name, active_users, list_of_static_hashtags, delay, client_ip) end)
+      
       num_of_retweet_users = (25 * no_of_clients)/100
       if user_id < num_of_retweet_users do
         for _ <- 1..5 do
           retweet_id = Enum.random(active_users)
           retweet_user = "user" <> to_string(retweet_id)
-          Tweeter.Client.re_tweets(retweet_user)
+          Tweeter.Client.re_tweets(retweet_user, client_ip)
         end
       end
     end
 
     #Process.sleep(15000)
     if active_users != [] do
-      user_id = Enum.random(active_users)
-      user_name = "@user" <> to_string(user_id)
-      spawn(fn-> Tweeter.Client.query_for_usermentions(user_name) end)
+      for _ <- 1..5 do
+        user_id = Enum.random(active_users)
+        user_name = "@user" <> to_string(user_id)
+        spawn(fn-> Tweeter.Client.query_for_usermentions(user_name) end)
+      end
       #Process.sleep(5000)
     end
 
     if active_users != [] do
-      user_id = Enum.random(active_users)
-      user_name = "@user" <> to_string(user_id)
-      hashtag = Enum.random(list_of_static_hashtags)
-      spawn(fn-> Tweeter.Client.query_for_hashtags(user_name, hashtag) end)
+      for _ <- 1..5 do
+        user_id = Enum.random(active_users)
+        user_name = "@user" <> to_string(user_id)
+        hashtag = Enum.random(list_of_static_hashtags)
+        spawn(fn-> Tweeter.Client.query_for_hashtags(user_name, hashtag) end)
+      end
     end
 
     #Process.sleep(10000)
-    start_simulation(no_of_clients, list_of_static_hashtags, active_users)
+    start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip)
   end
 
   def main(args) do
-    [no_of_clients] = args
+    [no_of_clients, server_ip] = args
     no_of_clients = String.to_integer(no_of_clients)
-
     list_of_static_hashtags = ["#happyme","#gogators ","#cityofjoy","#lifeisgood","#indiacalling"]
 
-    # Start the server
-    Tweeter.Server.startlink()
-    IO.inspect "Tweeter engine started"
+    client_ip = connect_to_engine(server_ip)
 
     for n <- 1..no_of_clients do
       user_name = "user" <> to_string(n)
@@ -146,8 +160,7 @@ defmodule Tweeter do
     # Subscribe all users
     subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients)
     # Process.sleep(10000)
-    start_simulation(no_of_clients, list_of_static_hashtags, [])
-
+    start_simulation(no_of_clients, list_of_static_hashtags, [], client_ip)
     :timer.sleep(:infinity)
   end
 end

@@ -21,7 +21,7 @@ defmodule Tweeter.Client do
       IO.inspect result
     end
 
-    def send_tweets(username, active_users, list_of_static_hashtags, delay) do
+    def send_tweets(username, active_users, list_of_static_hashtags, delay, client_ip) do
       u_men_toss = Enum.random([1, -1])
       hash_toss = Enum.random([1, -1])
 
@@ -41,13 +41,17 @@ defmodule Tweeter.Client do
 
       tweet = ((:crypto.strong_rand_bytes(5)|> Base.encode16) |> (binary_part(0, 5))) <> " " <> ((:crypto.strong_rand_bytes(6)|> Base.encode16 |> binary_part(0, 6))) <> " " <> ((:crypto.strong_rand_bytes(7)|> Base.encode16 |> binary_part(0, 7)))
       tweet = tweet <> user_mention <> hashtag
-      GenServer.cast(String.to_atom("tweeter_engine"), {:tweet, username, tweet})
+      GenServer.cast(String.to_atom("tweeter_engine"), {:tweet, username, tweet, client_ip})
       Process.sleep(delay)
-      send_tweets(username, active_users, list_of_static_hashtags, delay)
+      send_tweets(username, active_users, list_of_static_hashtags, delay, client_ip)
     end
 
-    def re_tweets(username) do    
+    def re_tweets(username, client_ip) do    
       seen_tweets = GenServer.call(String.to_atom("tweeter_engine"), {:query_user_tweets, username}, :infinity)
+      seen_tweets = seen_tweets ++ GenServer.call(String.to_atom("tweeter_engine"), {:query_user_mentions, username}, :infinity)
+
+      IO.inspect seen_tweets
+
       last_searched_htag = GenServer.call(String.to_atom("tweeter_engine"), {:get_recent_hash_tag, username}, :infinity)
 
       seen_tweets = if last_searched_htag != {} do
@@ -61,10 +65,9 @@ defmodule Tweeter.Client do
 
       if seen_tweets != [] and seen_tweets != nil do
         rand_seen_tweet = Enum.random(seen_tweets)
-        GenServer.cast(String.to_atom("tweeter_engine"), {:retweet, username, elem(rand_seen_tweet, 1), elem(rand_seen_tweet, 0)})
+        GenServer.cast(String.to_atom("tweeter_engine"), {:retweet, username, elem(rand_seen_tweet, 1), elem(rand_seen_tweet, 0), client_ip})
         retweet = elem(rand_seen_tweet, 1)
         from_user = elem(rand_seen_tweet, 0)
-        IO.inspect "Retweet::: #{from_user} ::: #{username} ::: #{retweet}"
       end
     end
 
