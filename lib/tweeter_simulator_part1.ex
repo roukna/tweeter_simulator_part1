@@ -27,19 +27,20 @@ defmodule Tweeter do
 
   def connect_to_engine(server_ip) do    
     client_ip = get_ip(0)
-    server = "server@" <> to_string(server_ip)
+    server = "tweeter_engine@" <> to_string(server_ip)
     client = "client" <> "@" <> to_string(client_ip)
-    Node.start(String.to_atom(client))
-    Node.set_cookie(:tweeter)
-    # Connects to the server
-    Node.connect(String.to_atom(server))
 
     IO.inspect "Client connect string: #{client}"
     IO.inspect "Server connect string: #{server}"
+
+    Node.start(String.to_atom(client))
+    Node.set_cookie(:tweeter)
+    # Connects to the server
+    IO.inspect Node.connect(String.to_atom(server))
     client
   end
 
-  def maintain_connect_disconnect(no_of_clients, active_users) do
+  def maintain_connect_disconnect(no_of_clients, active_users, server_ip) do
     rand_active = Enum.random(1..no_of_clients)
     users = Enum.to_list(1..no_of_clients)
     non_active_users = users -- active_users
@@ -54,7 +55,7 @@ defmodule Tweeter do
         user_name = "user" <> to_string(rand_user)
         password = "user" <> to_string(rand_user)
         # TODO Store result
-        Tweeter.Client.start_client(user_name, password)
+        Tweeter.Client.start_client(user_name, password, server_ip)
         rand_user
       end
     else
@@ -64,7 +65,7 @@ defmodule Tweeter do
         user_name = "user" <> to_string(rand_user)
         password = "user" <> to_string(rand_user)
         # TODO Store result
-        Tweeter.Client.stop_client(user_name)
+        Tweeter.Client.stop_client(user_name, server_ip)
         rand_user
       end
     end
@@ -77,7 +78,7 @@ defmodule Tweeter do
     active_users
   end
 
-  def subscribe_all_user(no_of_clients) do
+  def subscribe_all_user(no_of_clients, server_ip) do
     list_of_available_users = Enum.to_list(1..no_of_clients)
     harmonic_list = for j <- 1..no_of_clients do
       1/j
@@ -86,61 +87,63 @@ defmodule Tweeter do
     for id <- 1..no_of_clients do
       follower = "user" <> to_string(id)
       num_of_sub = round(Float.floor(c/id))
-      subscribe_user(follower, List.delete(list_of_available_users, id), num_of_sub)
+      subscribe_user(follower, List.delete(list_of_available_users, id), num_of_sub, server_ip)
     end    
   end
 
-  def subscribe_user(follower, list_of_available_users, num_of_sub) do
+  def subscribe_user(follower, list_of_available_users, num_of_sub, server_ip) do
     if list_of_available_users != [] do
       rand_id = Enum.random(list_of_available_users)
       user = "user" <> to_string(rand_id)
-      GenServer.cast(@name, {:subscribe, follower, user})
+      GenServer.cast({@name, String.to_atom("tweeter_engine@" <> to_string(server_ip))}, {:subscribe, follower, user})
       num_of_sub = num_of_sub - 1
-      subscribe_user(follower, List.delete(list_of_available_users, rand_id), num_of_sub)
+      subscribe_user(follower, List.delete(list_of_available_users, rand_id), num_of_sub, server_ip)
     end
   end
 
-  def start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip) do
+  def start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip, server_ip) do
     # Maintain connect and disconnect
-    active_users = Tweeter.maintain_connect_disconnect(no_of_clients, active_users)
+    active_users = Tweeter.maintain_connect_disconnect(no_of_clients, active_users, server_ip)
     Process.sleep(500)
+    
     # Send tweets
     for user_id <- active_users do
       user_name = "user" <> to_string(user_id)
       delay = @delay * user_id
-      spawn(fn -> Tweeter.Client.send_tweets(user_name, active_users, list_of_static_hashtags, delay, client_ip) end)
+      spawn(fn -> Tweeter.Client.send_tweets(user_name, active_users, list_of_static_hashtags, delay, client_ip, server_ip) end)
       
       num_of_retweet_users = (25 * no_of_clients)/100
       if user_id < num_of_retweet_users do
         for _ <- 1..5 do
           retweet_id = Enum.random(active_users)
           retweet_user = "user" <> to_string(retweet_id)
-          Tweeter.Client.re_tweets(retweet_user, client_ip)
+          Tweeter.Client.re_tweets(retweet_user, client_ip, server_ip)
         end
       end
     end
 
-    #Process.sleep(15000)
+    Process.sleep(5000)
+
     if active_users != [] do
       for _ <- 1..5 do
         user_id = Enum.random(active_users)
         user_name = "@user" <> to_string(user_id)
-        spawn(fn-> Tweeter.Client.query_for_usermentions(user_name) end)
+        spawn(fn-> Tweeter.Client.query_for_usermentions(user_name, server_ip) end)
       end
-      #Process.sleep(5000)
     end
+
+    Process.sleep(5000)
 
     if active_users != [] do
       for _ <- 1..5 do
         user_id = Enum.random(active_users)
         user_name = "@user" <> to_string(user_id)
         hashtag = Enum.random(list_of_static_hashtags)
-        spawn(fn-> Tweeter.Client.query_for_hashtags(user_name, hashtag) end)
+        spawn(fn-> Tweeter.Client.query_for_hashtags(user_name, hashtag, server_ip) end)
       end
     end
 
-    #Process.sleep(10000)
-    start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip)
+    start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip, server_ip)
   end
 
   def main(args) do
@@ -154,13 +157,13 @@ defmodule Tweeter do
       user_name = "user" <> to_string(n)
       password = "user" <> to_string(n)
       # TODO Store result
-      GenServer.call(@name, {:register_account, user_name, password}, :infinity)
+      GenServer.call({String.to_atom("tweeter_engine"), String.to_atom("tweeter_engine@" <> to_string(server_ip))}, {:register_account, user_name, password}, :infinity)
     end
 
     # Subscribe all users
-    subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients)
+    subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients, server_ip)
     # Process.sleep(10000)
-    start_simulation(no_of_clients, list_of_static_hashtags, [], client_ip)
+    start_simulation(no_of_clients, list_of_static_hashtags, [], client_ip, server_ip)
     :timer.sleep(:infinity)
   end
 end

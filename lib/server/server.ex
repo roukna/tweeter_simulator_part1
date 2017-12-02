@@ -123,7 +123,9 @@ defmodule Tweeter.Server do
       :ets.insert(user_mentions, {u_mentions, tweet_ids_of_umen})
     end
 
-    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet, client_ip})
+    IO.inspect "Tweet::: User #{user_name} ::: #{tweet}"
+
+    GenServer.cast({String.to_atom("tweeter_engine"), Node.self()}, {:broadcast_live_tweets, user_name, tweet, client_ip})
 
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
   end
@@ -137,7 +139,7 @@ defmodule Tweeter.Server do
     :ets.insert_new(tweets, {tweet_id, user_name, tweet, current_time, True, retweeted_from})  
     IO.inspect "Retweet::: User #{user_name} retweeted #{tweet} from #{retweeted_from}"
 
-    GenServer.cast(String.to_atom("tweeter_engine"), {:broadcast_live_tweets, user_name, tweet, client_ip})
+    GenServer.cast({String.to_atom("tweeter_engine"), Node.self()}, {:broadcast_live_tweets, user_name, tweet, client_ip})
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
   end
 
@@ -151,10 +153,7 @@ defmodule Tweeter.Server do
     end
     
     for f_user <- subscribers do
-      pid = GenServer.whereis(String.to_atom(f_user))
-      if(pid != nil and Process.alive?(pid) == true) do
         GenServer.cast({String.to_atom(f_user), String.to_atom(client_ip)}, {:live_tweets, user_name, tweet})
-      end
     end
     {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
   end
@@ -173,7 +172,6 @@ defmodule Tweeter.Server do
       Enum.map(list_of_tweets, fn tweet -> {f_user, tweet} end)
     end
     result = List.flatten(result)
-    #IO.inspect result
     {:reply, result, state}
   end
 
@@ -191,7 +189,6 @@ defmodule Tweeter.Server do
       list_of_tweets = List.to_tuple(List.flatten(:ets.match(tweets, {u_tweet_id, :"$1", :"$2", :_, False, :_})))
     end
     result = List.flatten(result)
-    #IO.inspect result
     {:reply, result, state}
   end
 
