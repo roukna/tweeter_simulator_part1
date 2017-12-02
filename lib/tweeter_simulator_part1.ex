@@ -33,9 +33,6 @@ defmodule Tweeter do
 
     Process.sleep(500)
 
-    #IO.inspect active_users
-    #IO.inspect non_active_users
-
     diff_users = if rand_active > no_of_active_users do
       diff = rand_active - no_of_active_users
       diff_users = for _ <- (1..diff) do
@@ -92,6 +89,8 @@ defmodule Tweeter do
   def start_simulation(no_of_clients, list_of_static_hashtags, active_users) do
     # Maintain connect and disconnect
     active_users = Tweeter.maintain_connect_disconnect(no_of_clients, active_users)
+
+    Process.sleep(500)
     #IO.inspect active_users
 
     # Send tweets
@@ -99,17 +98,14 @@ defmodule Tweeter do
       user_name = "user" <> to_string(user_id)
       delay = @delay * user_id
       spawn(fn -> Tweeter.Client.send_tweets(user_name, active_users, list_of_static_hashtags, delay) end)
-      #spawn(fn -> Tweeter.Client.send_tweets(user_name, tweet, delay) end)
       num_of_retweet_users = (25 * no_of_clients)/100
-      #re_tweets(username)
-      #if user_id < num_of_retweet_users do
-        #for _ <- 1..5 do
-
+      if user_id < num_of_retweet_users do
+        for _ <- 1..5 do
           retweet_id = Enum.random(active_users)
           retweet_user = "user" <> to_string(retweet_id)
           Tweeter.Client.re_tweets(retweet_user)
-        #end
-      #end
+        end
+      end
     end
 
     #Process.sleep(15000)
@@ -145,7 +141,7 @@ defmodule Tweeter do
       user_name = "user" <> to_string(n)
       password = "user" <> to_string(n)
       # TODO Store result
-      GenServer.call(@name, {:register_account, user_name, password})
+      GenServer.call(@name, {:register_account, user_name, password}, :infinity)
     end
 
     # Subscribe all users

@@ -62,11 +62,11 @@ defmodule Tweeter.Server do
   end
   
   # Logout
-  def handle_call({:logout, user_name}, state) do
+  def handle_cast({:logout, user_name}, state) do
     {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
     list_of_active_users = List.delete(list_of_active_users, user_name)
     login_pwd = elem(List.first(:ets.lookup(users, user_name)), 1)
-    {:reply, "Logout successful", state}
+    {:noreply, state}
   end
   
   
@@ -165,8 +165,6 @@ defmodule Tweeter.Server do
     else
       elem(List.first(:ets.lookup(following, user_name)), 1)
     end
-
-    #IO.inspect subscribing
 
     result = for f_user <- subscribing do
       list_of_tweets = List.flatten(:ets.match(tweets, {:_, f_user, :"$1", :_, :_, :_}))

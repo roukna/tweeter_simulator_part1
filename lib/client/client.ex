@@ -7,19 +7,18 @@ defmodule Tweeter.Client do
     end
 
     def query_for_hashtags(user_name, hashtag) do
-      #IO.inspect hashtag
-      result = GenServer.call(String.to_atom("tweeter_engine"), {:get_tweets_hashtag, user_name, hashtag})
-      #IO.inspect result
+      result = GenServer.call(String.to_atom("tweeter_engine"), {:get_tweets_hashtag, user_name, hashtag}, :infinity)
+      IO.inspect "Query for hashtag ::: #{user_name}"
+      IO.inspect result
     end
 
     def query_for_usermentions(user_name) do
-      result = GenServer.call(String.to_atom("tweeter_engine"), {:query_user_mentions, user_name})
-      #IO.inspect "@" <> user_name
-      #IO.inspect result
+      result = GenServer.call(String.to_atom("tweeter_engine"), {:query_user_mentions, user_name}, :infinity)
+      IO.inspect "Query for user mentions ::: @#{user_name}"
+      IO.inspect result
     end
 
     def send_tweets(username, active_users, list_of_static_hashtags, delay) do
-
       u_men_toss = Enum.random([1, -1])
       hash_toss = Enum.random([1, -1])
 
@@ -38,50 +37,40 @@ defmodule Tweeter.Client do
       end
 
       tweet = ((:crypto.strong_rand_bytes(5)|> Base.encode16) |> (binary_part(0, 5))) <> " " <> ((:crypto.strong_rand_bytes(6)|> Base.encode16 |> binary_part(0, 6))) <> " " <> ((:crypto.strong_rand_bytes(7)|> Base.encode16 |> binary_part(0, 7)))
-      #<> ((:crypto.strong_rand_bytes(7)|> Base.encode16 |> binary_part(0, 7)))
       tweet = tweet <> user_mention <> hashtag
-
-      #IO.inspect "#{username} ::: #{tweet}"
-
       GenServer.cast(String.to_atom("tweeter_engine"), {:tweet, username, tweet})
       Process.sleep(delay)
       send_tweets(username, active_users, list_of_static_hashtags, delay)
     end
 
-    def re_tweets(username) do   
-      #IO.inspect "here"  
-      seen_tweets = GenServer.call(String.to_atom("tweeter_engine"), {:query_user_tweets, username})
-      #IO.inspect "Seen tweets ::: #{seen_tweets}"
-      last_searched_htag = GenServer.call(String.to_atom("tweeter_engine"), {:get_recent_hash_tag, username})
+    def re_tweets(username) do    
+      seen_tweets = GenServer.call(String.to_atom("tweeter_engine"), {:query_user_tweets, username}, :infinity)
+      last_searched_htag = GenServer.call(String.to_atom("tweeter_engine"), {:get_recent_hash_tag, username}, :infinity)
 
       seen_tweets = if last_searched_htag != {} do
         last_searched_htag = elem(last_searched_htag, 1)
-        seen_tweets ++ GenServer.call(String.to_atom("tweeter_engine"), {:get_tweets_hashtag, username, last_searched_htag})
+        seen_tweets ++ GenServer.call(String.to_atom("tweeter_engine"), {:get_tweets_hashtag, username, last_searched_htag}, :infinity)
       else 
         seen_tweets
       end
 
-      #IO.inspect seen_tweets
-
       if seen_tweets != [] and seen_tweets != nil do
         rand_seen_tweet = Enum.random(seen_tweets)
-        #IO.inspect rand_seen_tweet
         GenServer.cast(String.to_atom("tweeter_engine"), {:retweet, username, elem(rand_seen_tweet, 1), elem(rand_seen_tweet, 0)})
         retweet = elem(rand_seen_tweet, 1)
         from_user = elem(rand_seen_tweet, 0)
         IO.inspect "Retweet::: #{from_user} ::: #{username} ::: #{retweet}"
       end
-      #re_tweets(username)
     end
 
     def stop_client(user_name) do
-      #GenServer.call(String.to_atom("tweeter_engine"), {:logout})
+      GenServer.cast(String.to_atom("tweeter_engine"), {:logout, user_name})
       GenServer.cast(String.to_atom(user_name), :stop)
     end
 
     def handle_cast({:live_tweets, user_name, tweet}, state) do
       {client_name} = state
-       #IO.inspect "#{client_name} ::: #{user_name} ::: #{tweet}"
+      IO.inspect "#{client_name} ::: #{user_name} ::: #{tweet}"
       {:noreply, state}
     end
 
