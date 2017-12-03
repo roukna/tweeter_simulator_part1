@@ -15,7 +15,7 @@ Step 3: Open another terminal and run the simulator using the following command:
 $ mix escript.build
 $ ./tweeter_simulator_part1 1000 10.3.1.212
 ```
-where 1000 is the number of users and 10.3.1.212 is the IP address of the server. Enter the *number of users* you wish to run the simulator with. The IP address is the IP address of the server (noted in the previous step). Every time you run the simulator for a different *number of users*, make sure you restart the tweeter engine prior to it (as in Step 1 and Step 2).
+where 1000 is the number of users and 10.3.1.212 is the IP address of the tweeter engine. Enter the *number of users* you wish to run the simulator with. The IP address is the IP address of the tweeter engine (noted in the previous step). Every time you run the simulator for a different *number of users*, make sure you restart the tweeter engine prior to it (as in Step 1 and Step 2).
 
 **What is working**:
 We have developed a Twitter like engine which allows users to register and login. A user can follow other users. User can send tweets. Once a user is online, he/she will get live tweets from the users he/she is subscribed to. The user can retweet some of these tweets. User can also query for tweets containing his mentions or particular hashtags or all tweets of the users he/she is following.
