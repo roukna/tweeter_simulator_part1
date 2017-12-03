@@ -158,24 +158,28 @@ defmodule Tweeter do
   end
 
   def main(args) do
-    [no_of_clients, server_ip] = args
-    no_of_clients = String.to_integer(no_of_clients)
-    list_of_static_hashtags = ["#happyme","#gogators ","#cityofjoy","#lifeisgood","#indiacalling"]
 
-    client_ip = connect_to_engine(server_ip)
+    if args == [] do
+      Tweeter.Server.startlink()
+    else
+      [no_of_clients, server_ip] = args
+      no_of_clients = String.to_integer(no_of_clients)
+      list_of_static_hashtags = ["#happyme","#gogators ","#cityofjoy","#lifeisgood","#indiacalling"]
+      client_ip = connect_to_engine(server_ip)
 
-    for n <- 1..no_of_clients do
-      user_name = "user" <> to_string(n)
-      password = "user" <> to_string(n)
-      # TODO Store result
-      GenServer.call({String.to_atom("tweeter_engine"), String.to_atom("tweeter_engine@" <> to_string(server_ip))}, {:register_account, user_name, password}, :infinity)
+      for n <- 1..no_of_clients do
+        user_name = "user" <> to_string(n)
+        password = "user" <> to_string(n)
+        # TODO Store result
+        GenServer.call({String.to_atom("tweeter_engine"), String.to_atom("tweeter_engine@" <> to_string(server_ip))}, {:register_account, user_name, password}, :infinity)
+      end
+
+      # Subscribe all users
+      IO.inspect "Subscribing users"
+      subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients, server_ip)
+      # Process.sleep(10000)
+      start_simulation(no_of_clients, list_of_static_hashtags, [], client_ip, server_ip)
     end
-
-    # Subscribe all users
-    IO.inspect "Subscribing users"
-    subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients, server_ip)
-    # Process.sleep(10000)
-    start_simulation(no_of_clients, list_of_static_hashtags, [], client_ip, server_ip)
-    :timer.sleep(:infinity)
+      :timer.sleep(:infinity)
   end
 end
