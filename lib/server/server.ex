@@ -20,7 +20,7 @@ defmodule Tweeter.Server do
 
     IO.inspect "Server connect string (from server): #{server}"
 
-    {:ok, pid} = GenServer.start_link(__MODULE__, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, 0}, name: String.to_atom("tweeter_engine"))
+    {:ok, pid} = GenServer.start_link(__MODULE__, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, 0, 0}, name: String.to_atom("tweeter_engine"))
   end
 
   @doc """
@@ -39,7 +39,7 @@ defmodule Tweeter.Server do
 
   # Register account
   def handle_call({:register_account, user_name, password}, _from, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     current_time = DateTime.utc_now()
     register_success = :ets.insert_new(users, {user_name, password, current_time})
 
@@ -52,11 +52,11 @@ defmodule Tweeter.Server do
 
   # Login
   def handle_cast({:login, user_name, password}, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     login_pwd = elem(List.first(:ets.lookup(users, user_name)), 1)
     if login_pwd == password do
       list_of_active_users = [user_name] ++ list_of_active_users
-      {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
+      {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets}}
     else 
       {:noreply, state}
     end
@@ -64,7 +64,7 @@ defmodule Tweeter.Server do
   
   # Logout
   def handle_cast({:logout, user_name}, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     list_of_active_users = List.delete(list_of_active_users, user_name)
     login_pwd = elem(List.first(:ets.lookup(users, user_name)), 1)
     {:noreply, state}
@@ -73,7 +73,7 @@ defmodule Tweeter.Server do
   
   # Subscribe
   def handle_cast({:subscribe, follower, user}, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     
     subscribers = if :ets.lookup(followers, user) == [] do
       []
@@ -91,12 +91,12 @@ defmodule Tweeter.Server do
     subscribing =  [user] ++ subscribing
     :ets.insert(following, {follower, subscribing})
 
-    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
+    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets}}
   end
 
   # Tweet
   def handle_cast({:tweet, user_name, tweet, client_ip}, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     tweet_id = tweet_id + 1
     current_time = DateTime.utc_now()
     :ets.insert_new(tweets, {tweet_id, user_name, tweet, current_time, False, user_name})
@@ -127,40 +127,42 @@ defmodule Tweeter.Server do
 
     GenServer.cast({String.to_atom("tweeter_engine"), Node.self()}, {:broadcast_live_tweets, user_name, tweet, client_ip})
 
-    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
+    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets}}
   end
 
   # Retweet
 
   def handle_cast({:retweet, user_name, tweet, retweeted_from, client_ip}, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     tweet_id = tweet_id + 1
     current_time = DateTime.utc_now()
     :ets.insert_new(tweets, {tweet_id, user_name, tweet, current_time, True, retweeted_from})  
     IO.inspect "Retweet::: User #{user_name} retweeted #{tweet} from #{retweeted_from}"
 
     GenServer.cast({String.to_atom("tweeter_engine"), Node.self()}, {:broadcast_live_tweets, user_name, tweet, client_ip})
-    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
+    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets}}
   end
 
   # Broadcast live tweets
   def handle_cast({:broadcast_live_tweets, user_name, tweet, client_ip}, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     subscribers = if :ets.lookup(followers, user_name) == [] do
       []
     else
       elem(List.first(:ets.lookup(followers, user_name)), 1)
     end
+
+    num_of_tweets = num_of_tweets + length(subscribers)
     
     for f_user <- subscribers do
         GenServer.cast({String.to_atom(f_user), String.to_atom(client_ip)}, {:live_tweets, user_name, tweet})
     end
-    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
+    {:noreply, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets}}
   end
 
   # Query user tweets
   def handle_call({:query_user_tweets, user_name}, _from, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     subscribing = if :ets.lookup(following, user_name) == [] do
       []
     else
@@ -177,7 +179,7 @@ defmodule Tweeter.Server do
 
   # Query user tweets
   def handle_call({:query_user_mentions, user_name}, _from, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     user_men = "@" <> user_name
     list_of_tweet_ids = if :ets.lookup(user_mentions, user_men) == [] do
       []
@@ -194,7 +196,7 @@ defmodule Tweeter.Server do
 
   # Get Tweets from Hashtags
   def handle_call({:get_tweets_hashtag, user_name, hashtag}, _from, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     tweet_ids = if :ets.lookup(hashtags, hashtag) == [] do
       []
     else
@@ -206,11 +208,11 @@ defmodule Tweeter.Server do
     end
     result = List.flatten(result)
     :ets.insert(user_recent_hashtags, {user_name, hashtag})
-    {:reply, result, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id}}
+    {:reply, result, {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets}}
   end
 
   def handle_call({:get_recent_hash_tag, user_name}, _from, state) do
-    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id} = state
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
     
     hashtag = if(:ets.lookup(user_recent_hashtags, user_name) == []) do
       {}
@@ -218,6 +220,11 @@ defmodule Tweeter.Server do
       List.first(:ets.lookup(user_recent_hashtags, user_name))
     end
     {:reply, hashtag, state}
+  end
+
+  def handle_call({:get_num_tweets}, _from, state) do
+    {users, tweets, followers, following, hashtags, user_mentions, user_recent_hashtags, list_of_active_users, tweet_id, num_of_tweets} = state
+    {:reply, num_of_tweets, state}
   end
 
 end

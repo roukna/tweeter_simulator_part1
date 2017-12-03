@@ -75,39 +75,50 @@ defmodule Tweeter do
     else
       active_users -- diff_users
     end
-    active_users
+
+    new_active_users = if rand_active > no_of_active_users do
+      diff_users
+    else
+      []
+    end
+    [active_users, new_active_users]
   end
 
   def subscribe_all_user(no_of_clients, server_ip) do
-    list_of_available_users = Enum.to_list(1..no_of_clients)
+    list_of_available_users = List.to_tuple(Enum.to_list(1..no_of_clients))
     harmonic_list = for j <- 1..no_of_clients do
-      1/j
+      Float.floor(1/j)
     end
-    c = (100/get_sum(harmonic_list,0))
+    c = Float.floor(100/get_sum(harmonic_list,0))
     for id <- 1..no_of_clients do
       follower = "user" <> to_string(id)
       num_of_sub = round(Float.floor(c/id))
-      subscribe_user(follower, List.delete(list_of_available_users, id), num_of_sub, server_ip)
-    end    
+      IO.inspect "#{follower} ::: #{num_of_sub}"
+      if num_of_sub != 0 do
+        subscribe_user(follower, Tuple.delete_at(list_of_available_users, (id - 1)), num_of_sub, server_ip)
+      end
+    end
+    Process.sleep(500)    
   end
 
   def subscribe_user(follower, list_of_available_users, num_of_sub, server_ip) do
-    if list_of_available_users != [] do
-      rand_id = Enum.random(list_of_available_users)
-      user = "user" <> to_string(rand_id)
+    if list_of_available_users != {} do
+      rand_id = Enum.random(0..(tuple_size(list_of_available_users)-1))
+      user = "user" <> to_string(elem(list_of_available_users, rand_id))
       GenServer.cast({@name, String.to_atom("tweeter_engine@" <> to_string(server_ip))}, {:subscribe, follower, user})
       num_of_sub = num_of_sub - 1
-      subscribe_user(follower, List.delete(list_of_available_users, rand_id), num_of_sub, server_ip)
+      x = Tuple.delete_at(list_of_available_users, rand_id)
+      subscribe_user(follower, x, num_of_sub, server_ip)
     end
   end
 
   def start_simulation(no_of_clients, list_of_static_hashtags, active_users, client_ip, server_ip) do
     # Maintain connect and disconnect
-    active_users = Tweeter.maintain_connect_disconnect(no_of_clients, active_users, server_ip)
+    [active_users, new_active_users] = Tweeter.maintain_connect_disconnect(no_of_clients, active_users, server_ip)
     Process.sleep(500)
     
     # Send tweets
-    for user_id <- active_users do
+    for user_id <- new_active_users do
       user_name = "user" <> to_string(user_id)
       delay = @delay * user_id
       spawn(fn -> Tweeter.Client.send_tweets(user_name, active_users, list_of_static_hashtags, delay, client_ip, server_ip) end)
@@ -161,6 +172,7 @@ defmodule Tweeter do
     end
 
     # Subscribe all users
+    IO.inspect "Subscribing users"
     subscribe_all_user = Tweeter.subscribe_all_user(no_of_clients, server_ip)
     # Process.sleep(10000)
     start_simulation(no_of_clients, list_of_static_hashtags, [], client_ip, server_ip)
