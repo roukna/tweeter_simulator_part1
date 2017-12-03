@@ -3,7 +3,7 @@ defmodule Tweeter do
   Documentation for Tweeter.
   """
   @name :tweeter_engine
-  @delay 10
+  @delay 5
   @doc """
   Code to return the IP address of the machine.
   """
